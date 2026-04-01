@@ -5,6 +5,9 @@
 🌟 ฟีเจอร์หลัก (Features)
 
 🔍 ระบบค้นหาอัจฉริยะ: ค้นหาด้วยชื่อ นามสกุล หรือ ID จาก Google Sheet ได้ทันที
+ตัวอย่างข้อมูล Google sheet
+https://docs.google.com/spreadsheets/d/1x71a0m5Q0OfJVHJVfiDiOVQDBGwjCG5mtJuwm9o8LCs/edit?gid=0#gid=0
+
 
 📄 สร้าง PDF อัตโนมัติ: วาดตัวหนังสือลงบนภาพพื้นหลังด้วย HTML5 Canvas และแปลงเป็น PDF ด้วย jsPDF
 
