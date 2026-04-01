@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบค้นหาและดาวน์โหลดเกียรติบัตร</title>
+  
+  <!-- Tailwind CSS สำหรับตกแต่งหน้าเว็บ -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome สำหรับไอคอน -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- ========================================== -->
+  <!-- 1. นำเข้าฟอนต์ภาษาไทยจาก Google Fonts ตรงนี้ -->
+  <!-- ========================================== -->
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- หากต้องการใช้ฟอนต์อื่น เช่น Kanit ให้ใช้บรรทัดล่างแทน (ลบเครื่องหมาย !-- ออก) -->
+  <!-- <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&display=swap" rel="stylesheet"> -->
+  
+  <!-- SweetAlert2 สำหรับแจ้งเตือนสวยงาม -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- jsPDF สำหรับสร้างไฟล์ PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <style>
+    body { 
+      font-family: 'Sarabun', sans-serif; /* เปลี่ยนชื่อฟอนต์ตรงนี้ด้วยหากใช้ฟอนต์อื่น */
+      background-color: #f0fdfa; 
+    }
+  </style>
+</head>
+<body class="min-h-screen py-10 px-4">
+
+  <div class="max-w-3xl mx-auto">
+    <!-- กล่องหลัก -->
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+      
+      <!-- ส่วนหัว -->
+      <div class="bg-gradient-to-r from-teal-500 to-blue-600 p-6 text-center">
+        <h1 class="text-3xl font-bold text-white mb-2">
+          <i class="fas fa-award mr-2"></i> ระบบค้นหาเกียรติบัตร
+        </h1>
+        <p class="text-teal-100">พิมพ์ชื่อ-สกุล หรือข้อมูลที่ต้องการเพื่อค้นหาเกียรติบัตรของคุณ</p>
+      </div>
+
+      <!-- ส่วนค้นหา -->
+      <div class="p-6 md:p-8">
+        <div class="flex flex-col md:flex-row gap-3 mb-6">
+          <div class="relative flex-grow">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-search text-gray-400"></i>
+            </div>
+            <input type="text" id="searchInput" 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-shadow text-lg" 
+              placeholder="ระบุคำค้นหา...">
+          </div>
+          <button id="searchBtn" 
+            class="bg-teal-600 text-white px-8 py-3 rounded-xl hover:bg-teal-700 transition duration-200 font-medium flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95">
+            ค้นหา
+          </button>
+        </div>
+
+        <!-- สถานะกำลังโหลด -->
+        <div id="loading" class="hidden text-center py-8">
+          <i class="fas fa-circle-notch fa-spin text-4xl text-teal-500 mb-3"></i>
+          <p class="text-gray-500 font-medium">กำลังสืบค้นข้อมูล กรุณารอสักครู่...</p>
+        </div>
+
+        <!-- พื้นที่แสดงผลลัพธ์ -->
+        <div id="results" class="space-y-4">
+          <!-- ข้อมูลจะถูกเติมด้วย JavaScript -->
+        </div>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="text-center mt-6 text-gray-500 text-sm">
+      <p>&copy; ระบบค้นหาและดาวน์โหลดเกียรติบัตรออนไลน์</p>
+    </div>
+  </div>
+
+  <script>
+    // --- ตั้งค่าภาพพื้นหลัง ---
+    var GOOGLE_DRIVE_ID = '1-tStxw0OaFglIEOiageDqlXa7gr2AsuF';//id backgroud share anyone link  '196u70ZLAqVWXzUbOwTWMEHbCq6Io2vua';
+    var BACKGROUND_IMAGE_URL = 'https://lh3.googleusercontent.com/d/' + GOOGLE_DRIVE_ID;
+
+    // ผูกฟังก์ชันเข้ากับ Global Object
+    window.executeSearch = function() {
+      var searchInput = document.getElementById('searchInput');
+      var searchTerm = searchInput ? searchInput.value : '';
+      
+      if(!searchTerm) {
+        Swal.fire('แจ้งเตือน', 'กรุณาระบุคำค้นหา', 'warning');
+        return;
+      }
+
+      if (typeof google === 'undefined' || typeof google.script === 'undefined') {
+        Swal.fire({
+          icon: 'error',
+          title: 'ข้อผิดพลาดการรันระบบ',
+          text: 'โปรดใช้งานผ่านลิงก์ Web App ของ Google Apps Script'
+        });
+        return;
+      }
+
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('results').innerHTML = '';
+
+      google.script.run
+        .withSuccessHandler(displayResults)
+        .withFailureHandler(showError)
+        .searchCertificate(searchTerm);
+    };
+
+    function displayResults(data) {
+      document.getElementById('loading').classList.add('hidden');
+      var resultsDiv = document.getElementById('results');
+
+      if(!data || data.length === 0) {
+        resultsDiv.innerHTML = '<div class="bg-red-50 text-red-600 rounded-xl p-6 text-center border border-red-100">' +
+            '<i class="fas fa-search-minus text-4xl mb-3"></i>' +
+            '<h3 class="text-lg font-semibold">ไม่พบข้อมูล</h3>' +
+            '<p class="text-red-500 text-sm mt-1">โปรดตรวจสอบคำค้นหา หรือติดต่อผู้ดูแลระบบ</p>' +
+          '</div>';
+        return;
+      }
+
+      var html = '';
+      
+      data.forEach(function(item, index) {
+        var detailsHtml = '';
+        var title = '';
+        var certId = ''; 
+        var firstNonUrl = '';
+
+        for (var key in item) {
+          if (item.hasOwnProperty(key)) {
+            var lowerKey = key.toLowerCase().trim();
+            if (!title && (lowerKey.indexOf('ชื่อ') !== -1 || lowerKey.indexOf('name') !== -1)) {
+              title = item[key];
+            }
+            if (lowerKey === 'id' || lowerKey.indexOf('เลขที่') !== -1) {
+              certId = item[key];
+            }
+          }
+        }
+
+        for (var key in item) {
+          if (item.hasOwnProperty(key)) {
+            var value = item[key];
+            if (!value || value.toString().trim() === '') continue; 
+
+            var strValue = value.toString();
+            var isUrl = strValue.startsWith('http://') || strValue.startsWith('https://');
+
+            if (!isUrl && !firstNonUrl) {
+              firstNonUrl = strValue;
+            }
+
+            if (isUrl) continue;
+
+            detailsHtml += '<div class="flex flex-col md:flex-row md:items-start py-1.5 border-b border-gray-100 last:border-0">' +
+                '<span class="text-gray-500 w-1/3 text-sm md:text-base">' + key + ':</span>' +
+                '<span class="text-gray-800 font-medium w-2/3">' + value + '</span>' +
+              '</div>';
+          }
+        }
+
+        if (!title) title = firstNonUrl;
+
+        var safeTitle = title ? title.replace(/'/g, "\\'") : '';
+        var safeId = certId ? certId.toString().replace(/'/g, "\\'") : '';
+
+        var linkHtml = '<button onclick="window.downloadCert(\'' + safeTitle + '\', \'' + safeId + '\')" ' +
+            'class="mt-4 inline-flex items-center justify-center w-full md:w-auto px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition duration-150 shadow-sm">' +
+            '<i class="fas fa-image mr-2"></i> สร้างและดาวน์โหลดเกียรติบัตร' +
+          '</button>';
+
+        html += '<div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg transition-shadow duration-300">' +
+            '<div class="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">' +
+              '<div class="bg-teal-100 text-teal-600 w-10 h-10 rounded-full flex items-center justify-center font-bold">' +
+                (index + 1) +
+              '</div>' +
+              '<h3 class="text-xl font-bold text-gray-800">' + (title || 'ข้อมูลผู้รับ') + '</h3>' +
+            '</div>' +
+            '<div class="space-y-1 mb-4">' +
+              detailsHtml +
+            '</div>' +
+            linkHtml +
+          '</div>';
+      });
+
+      resultsDiv.innerHTML = '<div class="text-sm text-gray-500 mb-3 ml-1">พบข้อมูลทั้งหมด <span class="font-bold text-teal-600">' + data.length + '</span> รายการ</div>' + html;
+    }
+
+    // ฟังก์ชันสร้างและดาวน์โหลดเกียรติบัตร
+    window.downloadCert = function(name, certId) {
+      Swal.fire({
+        title: 'กำลังสร้างเกียรติบัตร...',
+        text: 'กำลังโหลดฟอนต์และจัดเตรียมรูปภาพ กรุณารอสักครู่',
+        allowOutsideClick: false,
+        didOpen: function() {
+          Swal.showLoading();
+        }
+      });
+
+      // ==========================================
+      // 2. บังคับให้เบราว์เซอร์รอโหลด Google Font ให้เสร็จก่อนสร้างเกียรติบัตร
+      // ==========================================
+      document.fonts.ready.then(function() {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var img = new Image();
+        
+        img.crossOrigin = "Anonymous"; 
+        img.src = BACKGROUND_IMAGE_URL;
+        
+        img.onload = function() {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          
+          // ==========================================
+          // 3. กำหนดฟอนต์ที่จะพิมพ์ลงเกียรติบัตร
+          // เปลี่ยนคำว่า 'Sarabun' เป็น 'Kanit' ได้เลยถ้าแก้ Link ด้านบนแล้ว
+          // ==========================================
+          ctx.font = "bold 60px 'Sarabun'"; 
+          ctx.fillStyle = "#0f172a"; 
+          ctx.textAlign = "center"; 
+          
+          var nameX = canvas.width / 2;         
+          var nameY = canvas.height * 0.38;     
+          ctx.fillText(name, nameX, nameY);
+
+          if (certId) {
+              ctx.font = "bold 26px 'Sarabun'"; // เปลี่ยนชื่อฟอนต์ตรงนี้ด้วย
+              ctx.fillStyle = "#CE2626"; 
+              ctx.textAlign = "center"; 
+              
+              var idX = canvas.width * 0.89; 
+              var idY = canvas.height * 0.082; 
+              
+              ctx.fillText('2569-' + certId, idX, idY);
+          }
+          
+          try {
+            var dataURL = canvas.toDataURL("image/jpeg", 1.0);
+            
+            var { jsPDF } = window.jspdf;
+            var orientation = canvas.width > canvas.height ? 'l' : 'p'; 
+            var pdf = new jsPDF({
+              orientation: orientation,
+              unit: 'px',
+              format: [canvas.width, canvas.height] 
+            });
+            
+            pdf.addImage(dataURL, 'JPEG', 0, 0, canvas.width, canvas.height);
+            pdf.save('เกียรติบัตร_' + name + '.pdf');
+            
+            Swal.fire({
+              icon: 'success',
+              title: 'สร้างสำเร็จ!',
+              text: 'ระบบได้ดาวน์โหลดเกียรติบัตร (รูปแบบ PDF) ลงเครื่องของคุณแล้ว',
+              timer: 2500,
+              showConfirmButton: false
+            });
+          } catch (error) {
+            console.error("CORS Error DataURL:", error);
+            Swal.fire({
+              icon: 'error',
+              title: 'เกิดปัญหา (CORS Error)',
+              html: 'เบราว์เซอร์ไม่อนุญาตให้บันทึกภาพจาก Google Drive...',
+            });
+          }
+        };
+        
+        img.onerror = function(err) {
+          console.error("Image Load Error:", err);
+          Swal.fire({
+            icon: 'error',
+            title: 'ไม่สามารถโหลดภาพพื้นหลังได้',
+            text: 'Google Drive บล็อกการดึงภาพข้ามโดเมน'
+          });
+        };
+      }); // ปิด document.fonts.ready
+    };
+
+    function showError(error) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('results').innerHTML = '<div class="bg-red-50 text-red-600 rounded-xl p-6 text-center border border-red-100">' +
+          '<i class="fas fa-exclamation-triangle text-4xl mb-3"></i>' +
+          '<h3 class="text-lg font-semibold">เกิดข้อผิดพลาดทางเทคนิค</h3>' +
+          '<p class="text-red-500 text-sm mt-1">' + error.message + '</p>' +
+        '</div>';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var searchBtn = document.getElementById('searchBtn');
+      if(searchBtn) searchBtn.addEventListener('click', window.executeSearch);
+      
+      var searchInput = document.getElementById('searchInput');
+      if(searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') window.executeSearch();
+        });
+      }
+    });
+  </script>
+</body>
+</html>
